@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package scheduler.v1;
+
+option go_package = "github.com/distributed-scheduler/internal/grpc/schedulerpb";
+
+// Worker defines its capabilities
+message WorkerCapabilities {
+  int32 max_concurrent_tasks = 1;
+  repeated string supported_task_types = 2;
+}
+
+message RegisterWorkerRequest {
+  string worker_id = 1;
+  string hostname = 2;
+  string version = 3;
+  WorkerCapabilities capabilities = 4;
+}
+
+message RegisterWorkerResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+  int32 active_tasks = 2;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+}
+
+message TaskPayload {
+  bytes data = 1;
+}
+
+message ExecuteTaskRequest {
+  string task_id = 1;
+  string workflow_id = 2;
+  string execution_id = 3;
+  string task_type = 4;
+  TaskPayload payload = 5;
+  int32 attempt = 6;
+  int64 timeout_seconds = 7;
+}
+
+message ExecuteTaskResponse {
+  enum Status {
+    STATUS_UNKNOWN = 0;
+    STATUS_SUCCEEDED = 1;
+    STATUS_FAILED = 2;
+  }
+  string task_id = 1;
+  Status status = 2;
+  bytes result = 3;
+  string error_message = 4;
+}
+
+service SchedulerService {
+  rpc RegisterWorker(RegisterWorkerRequest) returns (RegisterWorkerResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // Bidirectional stream for task dispatch and results
+  // The worker connects, receives tasks, and sends results back asynchronously.
+  rpc StreamTasks(stream ExecuteTaskResponse) returns (stream ExecuteTaskRequest);
+}
