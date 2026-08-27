@@ -8,6 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type DeadLetterTask struct {
+	ID              pgtype.UUID        `json:"id"`
+	TaskExecutionID pgtype.UUID        `json:"task_execution_id"`
+	LastError       pgtype.Text        `json:"last_error"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
 type TaskAttempt struct {
 	ID              pgtype.UUID        `json:"id"`
 	TaskExecutionID pgtype.UUID        `json:"task_execution_id"`
@@ -31,6 +38,8 @@ type TaskExecution struct {
 	CompletedAt         pgtype.Timestamptz `json:"completed_at"`
 	CreatedAt           pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	NextRetryAt         pgtype.Timestamptz `json:"next_retry_at"`
+	MaxAttempts         int32              `json:"max_attempts"`
 }
 
 type Tenant struct {

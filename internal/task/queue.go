@@ -49,31 +49,68 @@ func (q *Queue) ReportTaskResult(ctx context.Context, taskExecID pgtype.UUID, wo
 
 	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 	
-	// Record the attempt
-	// We need to fetch the attempt number first, or let postgres trigger it.
-	// For simplicity, we just insert the attempt log using a subquery or by fetching the task first.
-	// But our UpdateTaskExecutionStatus doesn't return the attempt.
-	// Since we are in a transaction, let's just update the status.
-	
-	exec, err := qtx.UpdateTaskExecutionStatus(ctx, db.UpdateTaskExecutionStatusParams{
-		ID:          taskExecID,
-		Status:      status,
-		CompletedAt: now,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update task execution: %w", err)
-	}
+	if status == "FAILED" {
+		// Determine if we should retry or move to dead letter
+		exec, err := qtx.FailTaskExecution(ctx, taskExecID)
+		if err != nil {
+			return fmt.Errorf("failed to fail task execution: %w", err)
+		}
+		
+		if exec.Attempt < exec.MaxAttempts {
+			// Exponential backoff logic (simplified to fixed 5s for demo)
+			nextRetry := time.Now().Add(5 * time.Second)
+			_, err = qtx.MarkTaskForRetry(ctx, db.MarkTaskForRetryParams{
+				ID:          taskExecID,
+				NextRetryAt: pgtype.Timestamptz{Time: nextRetry, Valid: true},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to mark for retry: %w", err)
+			}
+		} else {
+			// Move to dead letter queue
+			_, err = qtx.MoveToDeadLetter(ctx, db.MoveToDeadLetterParams{
+				TaskExecutionID: taskExecID,
+				LastError:       pgtype.Text{String: errorMsg, Valid: errorMsg != ""},
+			})
+			if err != nil {
+				return fmt.Errorf("failed to move to dead letter queue: %w", err)
+			}
+		}
 
-	_, err = qtx.RecordTaskAttempt(ctx, db.RecordTaskAttemptParams{
-		TaskExecutionID: taskExecID,
-		WorkerID:        workerID,
-		Attempt:         exec.Attempt,
-		Status:          status,
-		ErrorMessage:    pgtype.Text{String: errorMsg, Valid: errorMsg != ""},
-		CompletedAt:     now,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to record task attempt: %w", err)
+		_, err = qtx.RecordTaskAttempt(ctx, db.RecordTaskAttemptParams{
+			TaskExecutionID: taskExecID,
+			WorkerID:        workerID,
+			Attempt:         exec.Attempt,
+			Status:          status,
+			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: errorMsg != ""},
+			CompletedAt:     now,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to record task attempt: %w", err)
+		}
+
+	} else {
+		// Success
+		exec, err := qtx.UpdateTaskExecutionStatus(ctx, db.UpdateTaskExecutionStatusParams{
+			ID:          taskExecID,
+			Status:      status,
+			CompletedAt: now,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to update task execution: %w", err)
+		}
+
+		_, err = qtx.RecordTaskAttempt(ctx, db.RecordTaskAttemptParams{
+			TaskExecutionID: taskExecID,
+			WorkerID:        workerID,
+			Attempt:         exec.Attempt,
+			Status:          status,
+			ErrorMessage:    pgtype.Text{String: errorMsg, Valid: errorMsg != ""},
+			CompletedAt:     now,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to record task attempt: %w", err)
+		}
 	}
 
 	return tx.Commit(ctx)

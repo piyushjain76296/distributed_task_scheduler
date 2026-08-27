@@ -35,6 +35,10 @@ func main() {
 	// Initialize components
 	queue := task.NewQueue(pool)
 	server := scheduler.NewGRPCServer(pool, queue)
+	sweeper := scheduler.NewSweeper(pool)
+
+	// Start background sweeper
+	go sweeper.Start(ctx)
 
 	// Start gRPC server
 	lis, err := net.Listen("tcp", ":50051")

@@ -25,7 +25,7 @@ WHERE id = (
     FOR UPDATE SKIP LOCKED
     LIMIT 1
 )
-RETURNING id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at
+RETURNING id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at, next_retry_at, max_attempts
 `
 
 type ClaimTaskParams struct {
@@ -48,6 +48,8 @@ func (q *Queries) ClaimTask(ctx context.Context, arg ClaimTaskParams) (TaskExecu
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextRetryAt,
+		&i.MaxAttempts,
 	)
 	return i, err
 }
@@ -55,7 +57,7 @@ func (q *Queries) ClaimTask(ctx context.Context, arg ClaimTaskParams) (TaskExecu
 const createTaskExecution = `-- name: CreateTaskExecution :one
 INSERT INTO task_executions (workflow_execution_id, workflow_task_id, status, attempt)
 VALUES ($1, $2, 'PENDING', 0)
-RETURNING id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at
+RETURNING id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at, next_retry_at, max_attempts
 `
 
 type CreateTaskExecutionParams struct {
@@ -78,12 +80,14 @@ func (q *Queries) CreateTaskExecution(ctx context.Context, arg CreateTaskExecuti
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextRetryAt,
+		&i.MaxAttempts,
 	)
 	return i, err
 }
 
 const getPendingTasks = `-- name: GetPendingTasks :many
-SELECT id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at FROM task_executions
+SELECT id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at, next_retry_at, max_attempts FROM task_executions
 WHERE status = 'PENDING'
 ORDER BY created_at ASC
 LIMIT $1::int
@@ -110,6 +114,8 @@ func (q *Queries) GetPendingTasks(ctx context.Context, dollar_1 int32) ([]TaskEx
 			&i.CompletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.NextRetryAt,
+			&i.MaxAttempts,
 		); err != nil {
 			return nil, err
 		}
@@ -165,7 +171,7 @@ SET status = $2,
     completed_at = $3,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at
+RETURNING id, workflow_execution_id, workflow_task_id, status, worker_id, attempt, lease_expires_at, started_at, completed_at, created_at, updated_at, next_retry_at, max_attempts
 `
 
 type UpdateTaskExecutionStatusParams struct {
@@ -189,6 +195,8 @@ func (q *Queries) UpdateTaskExecutionStatus(ctx context.Context, arg UpdateTaskE
 		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.NextRetryAt,
+		&i.MaxAttempts,
 	)
 	return i, err
 }

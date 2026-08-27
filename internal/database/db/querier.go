@@ -17,13 +17,17 @@ type Querier interface {
 	CreateWorkflow(ctx context.Context, arg CreateWorkflowParams) (Workflow, error)
 	CreateWorkflowExecution(ctx context.Context, arg CreateWorkflowExecutionParams) (WorkflowExecution, error)
 	CreateWorkflowTask(ctx context.Context, arg CreateWorkflowTaskParams) (WorkflowTask, error)
+	FailTaskExecution(ctx context.Context, id pgtype.UUID) (TaskExecution, error)
 	GetPendingTasks(ctx context.Context, dollar_1 int32) ([]TaskExecution, error)
 	GetWorker(ctx context.Context, id string) (Worker, error)
 	GetWorkflow(ctx context.Context, id pgtype.UUID) (Workflow, error)
 	GetWorkflowTasks(ctx context.Context, workflowID pgtype.UUID) ([]WorkflowTask, error)
 	MarkStaleWorkersOffline(ctx context.Context, lastHeartbeat pgtype.Timestamptz) error
+	MarkTaskForRetry(ctx context.Context, arg MarkTaskForRetryParams) (TaskExecution, error)
+	MoveToDeadLetter(ctx context.Context, arg MoveToDeadLetterParams) (DeadLetterTask, error)
 	RecordTaskAttempt(ctx context.Context, arg RecordTaskAttemptParams) (TaskAttempt, error)
 	RegisterWorker(ctx context.Context, arg RegisterWorkerParams) (Worker, error)
+	ScheduleRetries(ctx context.Context) ([]TaskExecution, error)
 	UpdateTaskExecutionStatus(ctx context.Context, arg UpdateTaskExecutionStatusParams) (TaskExecution, error)
 	UpdateWorkerHeartbeat(ctx context.Context, arg UpdateWorkerHeartbeatParams) error
 	UpdateWorkflowExecutionStatus(ctx context.Context, arg UpdateWorkflowExecutionStatusParams) (WorkflowExecution, error)
